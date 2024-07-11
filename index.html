@@ -3,24 +3,17 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=1920, height=1080">
     <title>Fixed Size HTML Page</title>
     <style>
         html,
         body {
+            width: 1080px;
+            height: 1920px;
             margin: 0;
             padding: 0;
             overflow: hidden;
             background-color: #a6a6a6;
-            width: 100vw;
-            height: 100vh;
-        }
-
-        .wrapper {
-            width: 1920px;
-            height: 1080px;
-            transform-origin: top left;
-            position: absolute;
         }
 
         .draggable {
@@ -46,8 +39,8 @@
         }
 
         .contentview {
-            width: 1920px;
-            height: 1080px;
+            width: 960px;
+            height: 540px;
             background-color: black;
             position: relative;
         }
@@ -64,30 +57,23 @@
             border-radius: 5px;
             cursor: pointer;
         }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
     </style>
 </head>
 
 <body>
-    <div class="wrapper">
-        <div class="contentview"></div>
-        <!-- <button id="sceneitem">Get Scene Items</button> -->
+    <div class="contentview">
+        <video id="video" autoplay></video>
     </div>
+    <button id="sceneitem">Get Scene Items</button>
 
     <script>
-
-        function scaleContent() {
-            const wrapper = document.querySelector('.wrapper');
-            const scaleX = window.innerWidth / 1920;
-            const scaleY = window.innerHeight / 1080;
-            const scale = Math.min(scaleX, scaleY);
-            wrapper.style.transform = `scale(${scale})`;
-        }
-
-        window.addEventListener('resize', scaleContent);
-        window.addEventListener('load', scaleContent);
-
         let sceneItems = [];
-        let currentScene = '';
 
         // Establish WebSocket connection
         const socket = new WebSocket('ws://localhost:4455'); // Use the correct IP and port
@@ -104,7 +90,6 @@
                 }
             };
             socket.send(JSON.stringify(identifyRequest));
-            getCurrentScene();
         });
 
         // Listen for messages
@@ -112,30 +97,12 @@
             const data = JSON.parse(event.data);
             console.log('Message from server', data);
 
-            // Handle response for GetCurrentProgramScene
-            if (data.op === 7 && data.d.requestType === 'GetCurrentProgramScene' && data.d.requestId === '2') {
-                currentScene = data.d.responseData.currentProgramSceneName;
-                getSceneItemList(currentScene);
-            }
-
             // Handle response for GetSceneItemList
             if (data.op === 7 && data.d.requestType === 'GetSceneItemList' && data.d.requestId === '3') {
                 console.log('Scene Items:', data.d.responseData.sceneItems);
                 sceneItems = extractSourceDetails(data.d.responseData.sceneItems);
-
+                console.log(sceneItems[1].scaleX);
                 displaySceneItems(sceneItems);
-            }
-
-            // Handle events
-            if (data.op === 5) {
-                switch (data.d.eventType) {
-                    case 'SwitchScenes':
-                    case 'SceneItemCreated':
-                    case 'SceneItemRemoved':
-                    case 'SceneItemTransformChanged':
-                        getCurrentScene();
-                        break;
-                }
             }
         });
 
@@ -147,7 +114,7 @@
 
             sceneItems.forEach((item, index) => {
                 const color = colors[index % colors.length]; // Get color based on index
-                generateObject(item.width, item.height, item.positionX, item.positionY, item.sourceName, color, item.sourceName, item.scaleX, item.scaleY);
+                generateObject(item.width / 2, item.height / 2, item.positionX / 2, item.positionY / 2, item.sourceName, color, item.sourceName, item.scaleX, item.scaleY);
             });
         }
 
@@ -155,7 +122,8 @@
             const draggables = document.querySelectorAll('.draggable');
             draggables.forEach(draggable => draggable.remove());
         }
-        function generateObject(width, height, left, topPosition, text, color, sourceName, scaleX, scaleY, fontSize) {
+
+        function generateObject(width, height, left, topPosition, text, color, sourceName, scaleX, scaleY) {
             const newDraggable = document.createElement('div');
             newDraggable.className = 'draggable';
             newDraggable.style.width = width + 'px';
@@ -163,20 +131,20 @@
             newDraggable.style.left = left + 'px';
             newDraggable.style.top = topPosition + 'px';
             newDraggable.style.backgroundColor = color;
-            newDraggable.style.fontSize = fontSize + 'px'; // Set initial font size
             newDraggable.textContent = text;
             newDraggable.dataset.sourceName = sourceName; // Store the source name
             newDraggable.dataset.scaleX = scaleX; // Store the scaleX
             newDraggable.dataset.scaleY = scaleY; // Store the scaleY
             newDraggable.dataset.originalWidth = width * 2; // Store the original width
             newDraggable.dataset.originalHeight = height * 2; // Store the original height
-            newDraggable.dataset.fontSize = fontSize; // Store the font size
+            newDraggable.style.opacity = '0.0'; // Set opacity to make the object semi-transparent
+
 
             const resizeHandle = document.createElement('div');
             resizeHandle.className = 'resize-handle';
             newDraggable.appendChild(resizeHandle);
 
-            document.querySelector('.wrapper').appendChild(newDraggable);
+            document.body.appendChild(newDraggable);
 
             newDraggable.addEventListener('mousedown', (e) => {
                 if (e.target.className === 'resize-handle') return;
@@ -226,15 +194,6 @@
             resizeHandle.ondragstart = () => {
                 return false;
             };
-
-            // Function to update text size
-            function updateTextSize(element, newSize) {
-                element.style.fontSize = newSize + 'px';
-                element.dataset.fontSize = newSize;
-            }
-
-            // Example usage: Update text size to 20px
-            updateTextSize(newDraggable, 40);
         }
 
         var id = 4;
@@ -256,8 +215,8 @@
 
             const width = parseInt(element.style.width, 10) * 2;
             const height = parseInt(element.style.height, 10) * 2;
-            const positionX = parseInt(element.style.left, 10);
-            const positionY = parseInt(element.style.top, 10);
+            const positionX = parseInt(element.style.left, 10) * 2;
+            const positionY = parseInt(element.style.top, 10) * 2;
 
             const newScaleX = width / originalWidth;
             const newScaleY = height / originalHeight;
@@ -268,7 +227,7 @@
                     "requestType": "SetSceneItemTransform",
                     "requestId": id.toString(),
                     "requestData": {
-                        "sceneName": currentScene, // Use the current scene
+                        "sceneName": "Scene",
                         "sceneItemId": sceneItem.sceneItemId, // Use the correct sceneItemId
                         "sceneItemTransform": {
                             "positionX": positionX,
@@ -291,40 +250,52 @@
             });
         };
 
-        function getSceneItemList(sceneName) {
+        // Get Scene Items
+        document.getElementById('sceneitem').addEventListener('click', () => {
             const getSceneItemList = {
                 "op": 6,
                 "d": {
                     "requestType": "GetSceneItemList",
                     "requestId": "3",
                     "requestData": {
-                        "sceneName": sceneName // Use the actual scene name
+                        "sceneName": "Scene" // Replace with the actual scene name
                     }
                 }
             };
             socket.send(JSON.stringify(getSceneItemList));
+        });
+
+        async function startVirtualCameraStream() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        deviceId: getVirtualCameraDeviceId(), width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                        frameRate: { ideal: 30 }
+                    }
+                });
+                const videoElement = document.getElementById('video');
+                videoElement.srcObject = stream;
+            } catch (err) {
+                console.error('Error accessing virtual camera: ', err);
+            }
         }
 
-        function getCurrentScene() {
-            const getCurrentProgramScene = {
-                "op": 6,
-                "d": {
-                    "requestType": "GetCurrentProgramScene",
-                    "requestId": "2",
+
+
+        function getVirtualCameraDeviceId() {
+            return navigator.mediaDevices.enumerateDevices().then(devices => {
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                const virtualCamera = videoDevices.find(device => device.label.includes('OBS'));
+                if (virtualCamera) {
+                    return virtualCamera.deviceId;
+                } else {
+                    throw new Error('OBS Virtual Camera not found');
                 }
-            };
-            socket.send(JSON.stringify(getCurrentProgramScene));
+            });
         }
 
-        // Get Scene Items button click
-        document.getElementById('sceneitem').addEventListener('click', () => {
-            getCurrentScene();
-        });
-
-        // Automatically get scene items on page load
-        window.addEventListener('load', () => {
-            getCurrentScene();
-        });
+        startVirtualCameraStream();
     </script>
 </body>
 
