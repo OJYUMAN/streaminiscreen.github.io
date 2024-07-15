@@ -70,7 +70,7 @@
     <div class="contentview">
         <video id="video" autoplay></video>
     </div>
-    <button id="sceneitem">Get Scene Items</button>
+    <!-- <button id="sceneitem">Get Scene Items</button> -->
 
     <script>
         let sceneItems = [];
@@ -90,6 +90,7 @@
                 }
             };
             socket.send(JSON.stringify(identifyRequest));
+            getCurrentScene();
         });
 
         // Listen for messages
@@ -97,11 +98,16 @@
             const data = JSON.parse(event.data);
             console.log('Message from server', data);
 
+            // Handle response for GetCurrentProgramScene
+            if (data.op === 7 && data.d.requestType === 'GetCurrentProgramScene' && data.d.requestId === '2') {
+                currentScene = data.d.responseData.currentProgramSceneName;
+                getSceneItemList(currentScene);
+            }
+
             // Handle response for GetSceneItemList
             if (data.op === 7 && data.d.requestType === 'GetSceneItemList' && data.d.requestId === '3') {
                 console.log('Scene Items:', data.d.responseData.sceneItems);
                 sceneItems = extractSourceDetails(data.d.responseData.sceneItems);
-                console.log(sceneItems[1].scaleX);
                 displaySceneItems(sceneItems);
             }
         });
@@ -137,7 +143,7 @@
             newDraggable.dataset.scaleY = scaleY; // Store the scaleY
             newDraggable.dataset.originalWidth = width * 2; // Store the original width
             newDraggable.dataset.originalHeight = height * 2; // Store the original height
-            newDraggable.style.opacity = '0.0'; // Set opacity to make the object semi-transparent
+            newDraggable.style.opacity = '0.5'; // Set opacity to make the object semi-transparent
 
 
             const resizeHandle = document.createElement('div');
@@ -198,6 +204,9 @@
 
         var id = 4;
 
+        let currentScene = '';
+
+
         function updateOBS(element) {
             const sourceName = element.dataset.sourceName;
             const sourcescaleX = parseFloat(element.dataset.scaleX);
@@ -227,7 +236,7 @@
                     "requestType": "SetSceneItemTransform",
                     "requestId": id.toString(),
                     "requestData": {
-                        "sceneName": "Scene",
+                        "sceneName": currentScene,
                         "sceneItemId": sceneItem.sceneItemId, // Use the correct sceneItemId
                         "sceneItemTransform": {
                             "positionX": positionX,
@@ -250,26 +259,14 @@
             });
         };
 
-        // Get Scene Items
-        document.getElementById('sceneitem').addEventListener('click', () => {
-            const getSceneItemList = {
-                "op": 6,
-                "d": {
-                    "requestType": "GetSceneItemList",
-                    "requestId": "3",
-                    "requestData": {
-                        "sceneName": "Scene" // Replace with the actual scene name
-                    }
-                }
-            };
-            socket.send(JSON.stringify(getSceneItemList));
-        });
-
         async function startVirtualCameraStream() {
             try {
+                const deviceId = await getVirtualCameraDeviceId();
+                console.log('Using device ID: ', deviceId);
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        deviceId: getVirtualCameraDeviceId(), width: { ideal: 1920 },
+                        deviceId: { exact: deviceId },
+                        width: { ideal: 1920 },
                         height: { ideal: 1080 },
                         frameRate: { ideal: 30 }
                     }
@@ -281,21 +278,71 @@
             }
         }
 
-
-
-        function getVirtualCameraDeviceId() {
-            return navigator.mediaDevices.enumerateDevices().then(devices => {
+        async function getVirtualCameraDeviceId() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
                 const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                console.log('Video devices found: ', videoDevices);
                 const virtualCamera = videoDevices.find(device => device.label.includes('OBS'));
                 if (virtualCamera) {
+                    console.log('OBS Virtual Camera found: ', virtualCamera);
                     return virtualCamera.deviceId;
                 } else {
                     throw new Error('OBS Virtual Camera not found');
                 }
-            });
+            } catch (err) {
+                console.error('Error enumerating devices: ', err);
+                throw err;
+            }
         }
 
         startVirtualCameraStream();
+
+        function getCurrentScene() {
+            const getCurrentProgramScene = {
+                "op": 6,
+                "d": {
+                    "requestType": "GetCurrentProgramScene",
+                    "requestId": "2",
+                }
+            };
+            socket.send(JSON.stringify(getCurrentProgramScene));
+        }
+
+        function getSceneItemList(sceneName) {
+            const getSceneItemList = {
+                "op": 6,
+                "d": {
+                    "requestType": "GetSceneItemList",
+                    "requestId": "3",
+                    "requestData": {
+                        "sceneName": sceneName // Use the actual scene name
+                    }
+                }
+            };
+            socket.send(JSON.stringify(getSceneItemList));
+        }
+
+        // Automatically get scene items on page load
+        window.addEventListener('load', () => {
+            // getCurrentScene(); // Moved to WebSocket 'open' event
+        });
+
+        async function getWebcamAccess() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                // Assuming you have a <video> element in your HTML
+                const videoElement = document.querySelector('video');
+                videoElement.srcObject = stream;
+                videoElement.play();
+            } catch (err) {
+                console.error('Error accessing the webcam', err);
+            }
+        }
+
+        // Call this function when you want to request webcam access
+        getWebcamAccess();
+
     </script>
 </body>
 
